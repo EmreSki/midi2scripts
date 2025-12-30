@@ -1,306 +1,530 @@
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
+local Camera = workspace.CurrentCamera
 
 local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
 
--- File system (exploit-dependent)
+-- File system setup
 local FolderName = "kkavasakisaimbot"
 local FileName = "notice_accepted.txt"
 
-local function fileExists()
-    if not (isfolder and isfile and makefolder and writefile) then return false end
-    if not isfolder(FolderName) then makefolder(FolderName) end
-    return isfile(FolderName .. "/" .. FileName)
+-- Check if file system is available
+local function checkAcceptanceFile()
+  if not isfolder then
+    return false
+  end
+  
+  if not isfolder(FolderName) then
+    makefolder(FolderName)
+  end
+  
+  if isfile(FolderName .. "/" .. FileName) then
+    return true
+  end
+  
+  return false
 end
 
+-- Save acceptance to file
 local function saveAcceptance()
-    if writefile and not isfolder(FolderName) then makefolder(FolderName) end
-    if writefile then
-        writefile(FolderName .. "/" .. FileName, "Accepted by " .. LocalPlayer.Name .. " on " .. os.date())
-    end
+  if not writefile then
+    return
+  end
+  
+  if not isfolder(FolderName) then
+    makefolder(FolderName)
+  end
+  
+  writefile(FolderName .. "/" .. FileName, "Notice accepted by " .. LocalPlayer.Name .. " on " .. os.date("%Y-%m-%d %H:%M:%S"))
 end
 
--- Config
+-- Configuration
 local Config = {
-    Enabled = false,
-    Key = Enum.KeyCode.C,
-    MenuKey = Enum.KeyCode.RightShift,
-    ESPKey = Enum.KeyCode.X,
-
-    ESPEnabled = false,
-    TeamCheck = true,
-    VisibleCheck = true,        -- New: Wall check for aim & ESP
-    Prediction = true,          -- New: Basic movement prediction
-    PredictAmount = 0.135,      -- Adjust for bullet speed feel
-
-    TargetPart = "Head",
-    FOV = 250,
-    Smoothness = 0.25,          -- Lower = smoother (0.05 very smooth, 1 instant)
-    ShowFOV = true,
-    FOVColor = Color3.fromRGB(255, 255, 255),
-
-    ESPColor = Color3.fromRGB(255, 0, 0),
-    TracerEnabled = true,
-    HealthBarEnabled = true,
-
-    NoticeShown = fileExists(),
-    MenuOpen = false,
-    LockOnTarget = nil,
-    ESPObjects = {}  -- {player = {Box, Tracer, Text, HealthBar}}
+  Enabled = false,
+  Key = Enum.KeyCode.C,
+  MenuKey = Enum.KeyCode.RightShift,
+  ESPKey = Enum.KeyCode.X,
+  ESPEnabled = false,
+  TeamCheck = true,
+  TargetPart = "Head",
+  FOV = 250,
+  Sensitivity = 0.5,
+  ShowFOV = true,
+  FOVColor = Color3.fromRGB(255, 255, 255),
+  LockOnTarget = nil,
+  NoticeShown = checkAcceptanceFile(),
+  MenuOpen = false,
+  ESPColor = Color3.fromRGB(255, 0, 0),
+  ESPBoxes = {}
 }
 
--- FOV Circle
-local FOVCircle = Drawing.new("Circle")
-FOVCircle.Thickness = 2
-FOVCircle.Filled = false
-FOVCircle.Transparency = 1
-FOVCircle.Color = Config.FOVColor
-FOVCircle.Radius = Config.FOV
-FOVCircle.Visible = Config.ShowFOV and Config.Enabled
+-- FOV Circle Drawing
+local FOVCircle
+if Config.ShowFOV then
+  FOVCircle = Drawing.new("Circle")
+  FOVCircle.Visible = Config.Enabled
+  FOVCircle.Radius = Config.FOV
+  FOVCircle.Color = Config.FOVColor
+  FOVCircle.Thickness = 2
+  FOVCircle.Filled = false
+  FOVCircle.Transparency = 1
+end
 
--- Notice GUI (unchanged mostly, minor style tweaks)
+-- Create Notice GUI
 local function createNoticeGUI()
-    -- (Your original notice GUI code here - kept identical for brevity)
-    -- Just add the OKButton click to set Config.NoticeShown = true, save, destroy, notify
-    -- ... (copy from original)
+  local ScreenGui = Instance.new("ScreenGui")
+  ScreenGui.Name = "AimbotNotice"
+  ScreenGui.ResetOnSpawn = false
+  ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+  
+  local Frame = Instance.new("Frame")
+  Frame.Size = UDim2.new(0, 400, 0, 250)
+  Frame.Position = UDim2.new(0.5, -200, 0.5, -125)
+  Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+  Frame.BorderSizePixel = 0
+  Frame.Parent = ScreenGui
+  
+  local UICorner = Instance.new("UICorner")
+  UICorner.CornerRadius = UDim.new(0, 12)
+  UICorner.Parent = Frame
+  
+  local Title = Instance.new("TextLabel")
+  Title.Size = UDim2.new(1, -40, 0, 40)
+  Title.Position = UDim2.new(0, 20, 0, 20)
+  Title.BackgroundTransparency = 1
+  Title.Text = "⚠️ AIMBOT NOTICE"
+  Title.TextColor3 = Color3.fromRGB(200, 100, 255)
+  Title.TextSize = 24
+  Title.Font = Enum.Font.GothamBold
+  Title.TextXAlignment = Enum.TextXAlignment.Left
+  Title.Parent = Frame
+  
+  local Message = Instance.new("TextLabel")
+  Message.Size = UDim2.new(1, -40, 0, 100)
+  Message.Position = UDim2.new(0, 20, 0, 70)
+  Message.BackgroundTransparency = 1
+  Message.Text = "Aimbot is ready to use!\n\nPress C to toggle Aimbot ON/OFF\nPress X to toggle ESP ON/OFF\nPress Right Shift to open menu\n\nThis script is written by kkavasaki__"
+  Message.TextColor3 = Color3.fromRGB(220, 220, 220)
+  Message.TextSize = 16
+  Message.Font = Enum.Font.Gotham
+  Message.TextWrapped = true
+  Message.TextYAlignment = Enum.TextYAlignment.Top
+  Message.Parent = Frame
+  
+  local OKButton = Instance.new("TextButton")
+  OKButton.Size = UDim2.new(0, 150, 0, 40)
+  OKButton.Position = UDim2.new(0.5, -75, 1, -60)
+  OKButton.BackgroundColor3 = Color3.fromRGB(100, 60, 200)
+  OKButton.Text = "OK"
+  OKButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+  OKButton.TextSize = 18
+  OKButton.Font = Enum.Font.GothamBold
+  OKButton.Parent = Frame
+  
+  local ButtonCorner = Instance.new("UICorner")
+  ButtonCorner.CornerRadius = UDim.new(0, 8)
+  ButtonCorner.Parent = OKButton
+  
+  OKButton.MouseEnter:Connect(function()
+    OKButton.BackgroundColor3 = Color3.fromRGB(120, 80, 220)
+  end)
+  
+  OKButton.MouseLeave:Connect(function()
+    OKButton.BackgroundColor3 = Color3.fromRGB(100, 60, 200)
+  end)
+  
+  OKButton.MouseButton1Click:Connect(function()
+    Config.NoticeShown = true
+    saveAcceptance()
+    ScreenGui:Destroy()
+    
+    game.StarterGui:SetCore("SendNotification", {
+      Title = "Aimbot Ready",
+      Text = "C: Aimbot | X: ESP | Right Shift: Menu",
+      Duration = 3
+    })
+  end)
+  
+  ScreenGui.Parent = LocalPlayer.PlayerGui
 end
 
--- Simple draggable menu (better than recreating every time)
-local MenuGui
+-- Create Menu GUI
 local function createMenuGUI()
-    if MenuGui then MenuGui:Destroy() end
-    -- (Your original menu code, but update InfoText live instead of recreating)
-    -- Add toggles/sliders for new options (VisibleCheck, Prediction, Smoothness, etc.)
-    -- For brevity, imagine expanded version here
+  local ScreenGui = Instance.new("ScreenGui")
+  ScreenGui.Name = "AimbotMenu"
+  ScreenGui.ResetOnSpawn = false
+  ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+  
+  local Frame = Instance.new("Frame")
+  Frame.Size = UDim2.new(0, 350, 0, 300)
+  Frame.Position = UDim2.new(0.5, -175, 0.5, -150)
+  Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+  Frame.BorderSizePixel = 0
+  Frame.Parent = ScreenGui
+  
+  local UICorner = Instance.new("UICorner")
+  UICorner.CornerRadius = UDim.new(0, 12)
+  UICorner.Parent = Frame
+  
+  local Title = Instance.new("TextLabel")
+  Title.Size = UDim2.new(1, -40, 0, 40)
+  Title.Position = UDim2.new(0, 20, 0, 20)
+  Title.BackgroundTransparency = 1
+  Title.Text = "🎯 AIMBOT MENU"
+  Title.TextColor3 = Color3.fromRGB(200, 100, 255)
+  Title.TextSize = 22
+  Title.Font = Enum.Font.GothamBold
+  Title.TextXAlignment = Enum.TextXAlignment.Left
+  Title.Parent = Frame
+  
+  local InfoText = Instance.new("TextLabel")
+  InfoText.Size = UDim2.new(1, -40, 0, 180)
+  InfoText.Position = UDim2.new(0, 20, 0, 70)
+  InfoText.BackgroundTransparency = 1
+  InfoText.Text = "Aimbot: " .. (Config.Enabled and "ENABLED ✓" or "DISABLED ✗") .. "\nESP: " .. (Config.ESPEnabled and "ENABLED ✓" or "DISABLED ✗") .. "\n\nKeybinds:\n• C - Toggle Aimbot\n• X - Toggle ESP\n• Right Shift - Toggle Menu\n\nSettings:\n• FOV: " .. Config.FOV .. "\n• Target: " .. Config.TargetPart .. "\n• Sensitivity: " .. Config.Sensitivity
+  InfoText.TextColor3 = Color3.fromRGB(220, 220, 220)
+  InfoText.TextSize = 14
+  InfoText.Font = Enum.Font.Gotham
+  InfoText.TextWrapped = true
+  InfoText.TextYAlignment = Enum.TextYAlignment.Top
+  InfoText.TextXAlignment = Enum.TextXAlignment.Left
+  InfoText.Parent = Frame
+  
+  local CloseButton = Instance.new("TextButton")
+  CloseButton.Size = UDim2.new(0, 120, 0, 35)
+  CloseButton.Position = UDim2.new(0.5, -60, 1, -55)
+  CloseButton.BackgroundColor3 = Color3.fromRGB(100, 60, 200)
+  CloseButton.Text = "CLOSE"
+  CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+  CloseButton.TextSize = 16
+  CloseButton.Font = Enum.Font.GothamBold
+  CloseButton.Parent = Frame
+  
+  local CloseCorner = Instance.new("UICorner")
+  CloseCorner.CornerRadius = UDim.new(0, 8)
+  CloseCorner.Parent = CloseButton
+  
+  CloseButton.MouseButton1Click:Connect(function()
+    Config.MenuOpen = false
+    ScreenGui:Destroy()
+  end)
+  
+  ScreenGui.Parent = LocalPlayer.PlayerGui
+  return ScreenGui
 end
 
-local function updateMenuText()
-    if not MenuGui then return end
-    -- Update the InfoText label with current config values
+-- Toggle function
+local function toggleAimbot()
+  if not Config.NoticeShown then
+    game.StarterGui:SetCore("SendNotification", {
+      Title = "Notice Required",
+      Text = "Please accept the notice first!",
+      Duration = 2
+    })
+    return
+  end
+  
+  Config.Enabled = not Config.Enabled
+  if FOVCircle then
+    FOVCircle.Visible = Config.Enabled
+  end
+  
+  if not Config.Enabled then
+    Config.LockOnTarget = nil
+  end
+  
+  local message = Config.Enabled and "Aimbot: ON" or "Aimbot: OFF"
+  game.StarterGui:SetCore("SendNotification", {
+    Title = "Aimbot",
+    Text = message,
+    Duration = 2
+  })
 end
 
--- ESP Creation
+-- Toggle menu
+local function toggleMenu()
+  if not Config.NoticeShown then
+    return
+  end
+  
+  Config.MenuOpen = not Config.MenuOpen
+  
+  if Config.MenuOpen then
+    createMenuGUI()
+  else
+    local gui = LocalPlayer.PlayerGui:FindFirstChild("AimbotMenu")
+    if gui then
+      gui:Destroy()
+    end
+  end
+end
+
+-- ESP Functions
 local function createESP(player)
-    if Config.ESPObjects[player] then return end
-
-    local Box = Drawing.new("Square")
-    Box.Thickness = 2
-    Box.Filled = false
-    Box.Transparency = 1
-    Box.Color = Config.ESPColor
-
-    local Tracer = Drawing.new("Line")
-    Tracer.Thickness = 2
-    Tracer.Transparency = 1
-    Tracer.Color = Config.ESPColor
-
-    local Text = Drawing.new("Text")
-    Text.Size = 13
-    Text.Center = true
-    Text.Outline = true
-    Text.Color = Color3.new(1,1,1)
-    Text.Font = 2
-
-    local HealthBar = Drawing.new("Line")
-    HealthBar.Thickness = 3
-    HealthBar.Color = Color3.fromRGB(0,255,0)
-
-    Config.ESPObjects[player] = {Box = Box, Tracer = Tracer, Text = Text, HealthBar = HealthBar}
+  local esp = {
+    Box = Drawing.new("Square"),
+    Info = Drawing.new("Text")
+  }
+  
+  esp.Box.Visible = false
+  esp.Box.Color = Config.ESPColor
+  esp.Box.Thickness = 2
+  esp.Box.Transparency = 1
+  esp.Box.Filled = false
+  
+  esp.Info.Visible = false
+  esp.Info.Color = Color3.fromRGB(255, 255, 255)
+  esp.Info.Size = 13
+  esp.Info.Center = true
+  esp.Info.Outline = true
+  esp.Info.Font = 2
+  
+  Config.ESPBoxes[player] = esp
 end
 
 local function removeESP(player)
-    local objs = Config.ESPObjects[player]
-    if objs then
-        for _, obj in pairs(objs) do obj:Remove() end
-        Config.ESPObjects[player] = nil
+  local esp = Config.ESPBoxes[player]
+  if esp then
+    esp.Box:Remove()
+    esp.Info:Remove()
+    Config.ESPBoxes[player] = nil
+  end
+end
+
+local function updateESP()
+  if not Config.ESPEnabled then
+    for _, esp in pairs(Config.ESPBoxes) do
+      esp.Box.Visible = false
+      esp.Info.Visible = false
     end
+    return
+  end
+  
+  for player, esp in pairs(Config.ESPBoxes) do
+    if player and player.Parent and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+      local hrp = player.Character.HumanoidRootPart
+      local head = player.Character:FindFirstChild("Head")
+      local humanoid = player.Character:FindFirstChild("Humanoid")
+      
+      if hrp and head and humanoid and humanoid.Health > 0 then
+        local vector, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+        
+        if onScreen and vector.Z > 0 then
+          local headPos = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+          local legPos = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+          
+          local height = math.abs(headPos.Y - legPos.Y)
+          local width = height / 2
+          
+          esp.Box.Size = Vector2.new(width, height)
+          esp.Box.Position = Vector2.new(vector.X - width / 2, vector.Y - height / 2)
+          esp.Box.Visible = true
+          
+          local distance = math.floor((Camera.CFrame.Position - hrp.Position).Magnitude)
+          local health = math.floor(humanoid.Health)
+          local maxHealth = math.floor(humanoid.MaxHealth)
+          
+          esp.Info.Text = player.Name .. " | " .. health .. "/" .. maxHealth .. " | " .. distance .. " studs"
+          esp.Info.Position = Vector2.new(vector.X, vector.Y - height / 2 - 15)
+          esp.Info.Visible = true
+        else
+          esp.Box.Visible = false
+          esp.Info.Visible = false
+        end
+      else
+        esp.Box.Visible = false
+        esp.Info.Visible = false
+      end
+    else
+      esp.Box.Visible = false
+      esp.Info.Visible = false
+    end
+  end
 end
 
--- Raycast visible check
-local function isVisible(targetPos)
-    if not Config.VisibleCheck then return true end
-    local origin = Camera.CFrame.Position
-    local direction = (targetPos - origin)
-    local params = RaycastParams.new()
-    params.FilterDescendantsInstances = {LocalPlayer.Character}
-    params.FilterType = Enum.RaycastFilterType.Blacklist
-    local result = Workspace:Raycast(origin, direction, params)
-    return result == nil or result.Position.Magnitude > direction.Magnitude - 1
+local function toggleESP()
+  if not Config.NoticeShown then
+    game.StarterGui:SetCore("SendNotification", {
+      Title = "Notice Required",
+      Text = "Please accept the notice first!",
+      Duration = 2
+    })
+    return
+  end
+  
+  Config.ESPEnabled = not Config.ESPEnabled
+  
+  if Config.ESPEnabled then
+    for _, player in pairs(Players:GetPlayers()) do
+      if player ~= LocalPlayer then
+        createESP(player)
+      end
+    end
+  else
+    for _, esp in pairs(Config.ESPBoxes) do
+      esp.Box.Visible = false
+      esp.Info.Visible = false
+    end
+  end
+  
+  local message = Config.ESPEnabled and "ESP: ON" or "ESP: OFF"
+  game.StarterGui:SetCore("SendNotification", {
+    Title = "ESP",
+    Text = message,
+    Duration = 2
+  })
 end
 
--- Valid target check
+-- Check if player is on the same team
+local function isTeamMate(player)
+  if not Config.TeamCheck then return false end
+  return player.Team == LocalPlayer.Team and player.Team ~= nil
+end
+
+-- Check if player is valid target
 local function isValidTarget(player)
-    if player == LocalPlayer or not player.Character then return false end
-    local hum = player.Character:FindFirstChild("Humanoid")
-    local root = player.Character:FindFirstChild("HumanoidRootPart")
-    if not hum or not root or hum.Health <= 0 then return false end
-    if Config.TeamCheck and player.Team == LocalPlayer.Team then return false end
-    return true
+  if player == LocalPlayer then return false end
+  if not player.Character then return false end
+  if not player.Character:FindFirstChild("Humanoid") then return false end
+  if player.Character.Humanoid.Health <= 0 then return false end
+  if isTeamMate(player) then return false end
+  return true
 end
 
--- Get closest in FOV
-local function getClosestPlayer()
-    local closest = nil
-    local shortest = Config.FOV
-    local mousePos = Vector2.new(Mouse.X, Mouse.Y)
-
-    for _, player in ipairs(Players:GetPlayers()) do
-        if isValidTarget(player) then
-            local part = player.Character:FindFirstChild(Config.TargetPart) or player.Character:FindFirstChild("Head")
-            if part then
-                local pos = part.Position
-                if Config.Prediction then
-                    local velocity = player.Character.HumanoidRootPart.Velocity
-                    pos = pos + velocity * Config.PredictAmount
-                end
-                local screenPos, onScreen = Camera:WorldToViewportPoint(pos)
-                if onScreen and screenPos.Z > 0 and isVisible(pos) then
-                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-                    if dist < shortest then
-                        shortest = dist
-                        closest = player
-                    end
-                end
-            end
+-- Get closest player within FOV
+local function getClosestPlayerInFOV()
+  local closestPlayer = nil
+  local shortestDistance = Config.FOV
+  
+  for _, player in pairs(Players:GetPlayers()) do
+    if isValidTarget(player) then
+      local targetPart = player.Character:FindFirstChild(Config.TargetPart)
+      
+      if targetPart then
+        local screenPoint, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+        
+        if onScreen and screenPoint.Z > 0 then
+          local vectorDistance = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPoint.X, screenPoint.Y)).Magnitude
+          
+          if vectorDistance < shortestDistance then
+            closestPlayer = player
+            shortestDistance = vectorDistance
+          end
         end
+      end
     end
-    return closest
+  end
+  
+  return closestPlayer
 end
 
--- Update ESP (called every frame)
-local function updateAllESP()
-    if not Config.ESPEnabled then
-        for _, objs in pairs(Config.ESPObjects) do
-            for _, obj in pairs(objs) do obj.Visible = false end
-        end
-        return
-    end
-
-    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-
-    for player, objs in pairs(Config.ESPObjects) do
-        if isValidTarget(player) then
-            local root = player.Character.HumanoidRootPart
-            local head = player.Character:FindFirstChild("Head")
-            local hum = player.Character.Humanoid
-            if root and head and hum then
-                local headScreen, headOn = Camera:WorldToViewportPoint(head.Position + Vector3.new(0,0.5,0))
-                local rootScreen, rootOn = Camera:WorldToViewportPoint(root.Position - Vector3.new(0,3,0))
-                if headOn and rootOn then
-                    local height = math.abs(headScreen.Y - rootScreen.Y)
-                    local width = height / 2
-
-                    -- Box
-                    objs.Box.Size = Vector2.new(width, height)
-                    objs.Box.Position = Vector2.new(headScreen.X - width/2, headScreen.Y)
-                    objs.Box.Visible = true
-
-                    -- Tracer
-                    if Config.TracerEnabled then
-                        objs.Tracer.From = screenCenter
-                        objs.Tracer.To = Vector2.new(headScreen.X, headScreen.Y + height/2)
-                        objs.Tracer.Visible = true
-                    end
-
-                    -- Text
-                    local dist = math.floor((Camera.CFrame.Position - root.Position).Magnitude)
-                    objs.Text.Text = string.format("%s\n%d/%d | %d studs", player.Name, math.floor(hum.Health), hum.MaxHealth, dist)
-                    objs.Text.Position = Vector2.new(headScreen.X, headScreen.Y - 15)
-                    objs.Text.Visible = true
-
-                    -- Health Bar
-                    if Config.HealthBarEnabled then
-                        local healthPct = hum.Health / hum.MaxHealth
-                        objs.HealthBar.From = Vector2.new(headScreen.X - width/2 - 5, headScreen.Y)
-                        objs.HealthBar.To = Vector2.new(headScreen.X - width/2 - 5, headScreen.Y + height * healthPct)
-                        objs.HealthBar.Color = Color3.fromHSV((healthPct / 3), 1, 1)
-                        objs.HealthBar.Visible = true
-                    end
-                else
-                    for _, obj in pairs(objs) do obj.Visible = false end
-                end
-            end
-        else
-            for _, obj in pairs(objs) do obj.Visible = false end
-        end
-    end
-end
-
--- Main loop
-RunService.RenderStepped:Connect(function(dt)
-    -- Update FOV circle (centered on mouse, +36 for Roblox UI offset)
+-- Update FOV circle position
+if FOVCircle then
+  RunService.RenderStepped:Connect(function()
     FOVCircle.Position = Vector2.new(Mouse.X, Mouse.Y + 36)
-    FOVCircle.Radius = Config.FOV
-    FOVCircle.Visible = Config.ShowFOV and Config.Enabled
-
-    updateAllESP()
-
-    if Config.Enabled and Config.NoticeShown then
-        local target = Config.LockOnTarget
-        if target and isValidTarget(target) and target.Character:FindFirstChild(Config.TargetPart) then
-            local part = target.Character[Config.TargetPart]
-            local predictPos = part.Position
-            if Config.Prediction then
-                predictPos = predictPos + part.Velocity * Config.PredictAmount
-            end
-            local screenPos, onScreen = Camera:WorldToViewportPoint(predictPos)
-            if onScreen and screenPos.Z > 0 and isVisible(predictPos) then
-                local mousePos = Vector2.new(Mouse.X, Mouse.Y)
-                local delta = Vector2.new(screenPos.X, screenPos.Y) - mousePos
-                local move = delta * (1 - Config.Smoothness)
-                mousemoverel(move.X, move.Y)
-            else
-                Config.LockOnTarget = nil
-            end
-        else
-            Config.LockOnTarget = getClosestPlayer()
-            if Config.LockOnTarget then
-                -- Optional lock notification
-            end
-        end
-    end
-end)
-
--- Input
-UserInputService.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if input.KeyCode == Config.Key then
-        if not Config.NoticeShown then return end
-        Config.Enabled = not Config.Enabled
-        FOVCircle.Visible = Config.ShowFOV and Config.Enabled
-        Config.LockOnTarget = nil
-    elseif input.KeyCode == Config.ESPKey then
-        if not Config.NoticeShown then return end
-        Config.ESPEnabled = not Config.ESPEnabled
-    elseif input.KeyCode == Config.MenuKey then
-        if not Config.NoticeShown then return end
-        Config.MenuOpen = not Config.MenuOpen
-        if Config.MenuOpen then createMenuGUI() else if MenuGui then MenuGui:Destroy() end end
-    end
-end)
-
--- Player handling
-Players.PlayerAdded:Connect(function(plr)
-    plr.CharacterAdded:Wait()
-    if Config.ESPEnabled and plr ~= LocalPlayer then createESP(plr) end
-end)
-
-Players.PlayerRemoving:Connect(function(plr)
-    removeESP(plr)
-    if Config.LockOnTarget == plr then Config.LockOnTarget = nil end
-end)
-
-for _, plr in ipairs(Players:GetPlayers()) do
-    if plr ~= LocalPlayer then createESP(plr) end
+  end)
 end
 
--- Init
+-- Check if locked target is valid
+local function isLockedTargetValid()
+  local target = Config.LockOnTarget
+  if not target then return false end
+  if not target.Parent then return false end
+  if not isValidTarget(target) then return false end
+  if not target.Character:FindFirstChild(Config.TargetPart) then return false end
+  return true
+end
+
+-- Main aimbot loop
+RunService.RenderStepped:Connect(function()
+  updateESP()
+  
+  if Config.Enabled and Config.NoticeShown then
+    if Config.LockOnTarget and isLockedTargetValid() then
+      local targetPart = Config.LockOnTarget.Character[Config.TargetPart]
+      local targetPosition, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+      
+      if onScreen and targetPosition.Z > 0 then
+        local mousePosition = Vector2.new(Mouse.X, Mouse.Y)
+        local aimPosition = Vector2.new(targetPosition.X, targetPosition.Y)
+        local movement = (aimPosition - mousePosition) * Config.Sensitivity
+        
+        mousemoverel(movement.X, movement.Y)
+      end
+    else
+      local newTarget = getClosestPlayerInFOV()
+      if newTarget then
+        Config.LockOnTarget = newTarget
+        game.StarterGui:SetCore("SendNotification", {
+          Title = "Target Locked",
+          Text = "Locked onto " .. newTarget.Name,
+          Duration = 1.5
+        })
+      end
+    end
+  end
+end)
+
+-- Input handling
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+  if gameProcessed then return end
+  
+  if input.KeyCode == Config.Key then
+    toggleAimbot()
+    Config.LockOnTarget = nil
+  elseif input.KeyCode == Config.MenuKey then
+    toggleMenu()
+  elseif input.KeyCode == Config.ESPKey then
+    toggleESP()
+  end
+end)
+
+-- Player removal handling
+Players.PlayerRemoving:Connect(function(player)
+  if Config.LockOnTarget == player then
+    Config.LockOnTarget = nil
+    if Config.Enabled then
+      game.StarterGui:SetCore("SendNotification", {
+        Title = "Target Lost",
+        Text = "Target left the game",
+        Duration = 1.5
+      })
+    end
+  end
+  
+  removeESP(player)
+end)
+
+-- Player added handling
+Players.PlayerAdded:Connect(function(player)
+  player.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    if Config.ESPEnabled and player ~= LocalPlayer then
+      createESP(player)
+    end
+  end)
+end)
+
+-- Initialize ESP for existing players
+for _, player in pairs(Players:GetPlayers()) do
+  if player ~= LocalPlayer then
+    createESP(player)
+  end
+end
+
+-- Show notice on load (only if not already accepted)
 if not Config.NoticeShown then
-    createNoticeGUI()
+  createNoticeGUI()
+  print("Aimbot script loaded by kkavasaki__")
+  print("Accept the notice to begin using the aimbot")
 else
-    -- Ready notification
+  game.StarterGui:SetCore("SendNotification", {
+    Title = "Aimbot Loaded",
+    Text = "C: Aimbot | X: ESP | Right Shift: Menu",
+    Duration = 3
+  })
+  print("Aimbot script loaded by kkavasaki__")
+  print("Notice already accepted - Ready to use!")
 end
